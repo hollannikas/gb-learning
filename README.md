@@ -32,5 +32,5 @@ Here are some useful resources to enhance your learning journey:
 
 ## Projects
 
-[Hello world tutorial](https://gbdev.io/gb-asm-tutorial/part1/setup.html) code: 04b4ecbaa0306517c22caebd77269f326e6ce207
+[Hello world tutorial](https://gbdev.io/gb-asm-tutorial/part1/setup.html) code: [04b4ecb](https://github.com/hollannikas/gb-learning/commit/04b4ecbaa0306517c22caebd77269f326e6ce207)
 

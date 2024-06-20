@@ -133,6 +133,7 @@ BounceOnTop:
     call CheckAndHandleBrick
     ld a, 1
     ld [wBallMomentumY], a
+
 BounceOnRight:
     ld a, [_OAMRAM + 4]
     sub a, 16
@@ -196,10 +197,8 @@ BounceDone:
     add a, 8 + 16 ; 8 to undo, 16 as the width.
     cp a, b
     jp c, PaddleBounceDone
-
     ld a, -1
     ld [wBallMomentumY], a
-
 PaddleBounceDone:
 
     ; Check the current keys every frame and move left or right.

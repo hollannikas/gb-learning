@@ -133,6 +133,7 @@ BounceOnTop:
     call CheckAndHandleBrick
     ld a, 1
     ld [wBallMomentumY], a
+    call PlayBounceSound
 
 BounceOnRight:
     ld a, [_OAMRAM + 4]
@@ -148,6 +149,7 @@ BounceOnRight:
     call CheckAndHandleBrick
     ld a, -1
     ld [wBallMomentumX], a
+    call PlayBounceSound
 
 BounceOnLeft:
     ld a, [_OAMRAM + 4]
@@ -163,6 +165,7 @@ BounceOnLeft:
     call CheckAndHandleBrick
     ld a, 1
     ld [wBallMomentumX], a
+    call PlayBounceSound
 
 BounceOnBottom:
     ld a, [_OAMRAM + 4]
@@ -178,6 +181,7 @@ BounceOnBottom:
     call CheckAndHandleBrick
     ld a, -1
     ld [wBallMomentumY], a
+    call PlayBounceSound
 BounceDone:
 
     ; First, check if the ball is low enough to bounce off the paddle.
@@ -199,6 +203,7 @@ BounceDone:
     jp c, PaddleBounceDone
     ld a, -1
     ld [wBallMomentumY], a
+    call PlayPaddleBounceSound
 PaddleBounceDone:
 
     ; Check the current keys every frame and move left or right.
@@ -291,6 +296,7 @@ CheckAndHandleBrick:
     cp a, BRICK_LEFT
     jr nz, CheckAndHandleBrickRight
     ; Break a brick from the left side.
+    call PlayBreakSound
     ld [hl], BLANK_TILE
     inc hl
     ld [hl], BLANK_TILE
@@ -298,6 +304,7 @@ CheckAndHandleBrickRight:
     cp a, BRICK_RIGHT
     ret nz
     ; Break a brick from the right side.
+    call PlayBreakSound
     ld [hl], BLANK_TILE
     dec hl
     ld [hl], BLANK_TILE
@@ -352,6 +359,40 @@ IsWallTile:
     ret z
     cp a, $07
     ret
+
+PlayBounceSound:
+    ld a, $85
+    ld [rNR21], a
+    ld a, $70
+    ld [rNR22], a
+    ld a, $0d
+    ld [rNR23], a
+    ld a, $c3
+    ld [rNR24], a
+    ret
+
+PlayPaddleBounceSound:
+    ld a, $85
+    ld [rNR21], a
+    ld a, $70
+    ld [rNR22], a
+    ld a, $f0
+    ld [rNR23], a
+    ld a, $d3
+    ld [rNR24], a
+    ret
+
+PlayBreakSound:
+    ld a, $01
+    ld [rNR41], a
+    ld a, $f0
+    ld [rNR42], a
+    ld a, $91
+    ld [rNR43], a
+    ld a, $c0
+    ld [rNR44], a
+    ret
+
 
 Tiles:
     dw `33333333

@@ -32,6 +32,5 @@ Here are some useful resources to enhance your learning journey:
 
 ## Projects
 
-Stay tuned for exciting Gameboy projects that I will be working on and sharing in this repository!
+[Hello world tutorial](https://gbdev.io/gb-asm-tutorial/part1/setup.html) code: 04b4ecbaa0306517c22caebd77269f326e6ce207
 
-Let's dive into the fascinating world of Gameboy development together!

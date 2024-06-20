@@ -2,8 +2,8 @@ ASM = rgbasm
 LINK = rgblink
 FIX = rgbfix
 
-ROM_NAME = hello_world
-SOURCES = src/hello_world.asm
+ROM_NAME = main
+SOURCES = src/main.asm
 FIX_FLAGS = -v -p 0xFF
 
 

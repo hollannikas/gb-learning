@@ -781,6 +781,8 @@ wFrameCounter: db
 SECTION "Input Variables", WRAM0
 wCurKeys: db
 wNewKeys: db
+
+SECTION "Score", WRAM0
 wScore: db
 
 SECTION "Ball Data", WRAM0

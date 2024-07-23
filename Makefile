@@ -1,11 +1,13 @@
+SRCDIR      	= src
+RESDIR      	= $(SRCDIR)/resources
+ROM_NAME = main
+SOURCES = src/main.asm
+
 ASM = rgbasm
 LINK = rgblink
 FIX = rgbfix
 
-ROM_NAME = main
-SOURCES = src/main.asm
 FIX_FLAGS = -v -p 0xFF
-
 
 INCDIR = inc
 OBJECTS = $(SOURCES:%.asm=%.o)

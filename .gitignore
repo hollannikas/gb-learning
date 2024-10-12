@@ -1,3 +1,5 @@
+.idea
+
 *.o
 *.sym
 *.gb

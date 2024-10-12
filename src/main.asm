@@ -1,12 +1,12 @@
 INCLUDE "hardware.inc"
 
-DEF BRICK_LEFT EQU $05
-DEF BRICK_RIGHT EQU $06
-DEF BLANK_TILE EQU $08
-
-DEF DIGIT_OFFSET EQU $1A
-DEF SCORE_TENS EQU $9870
-DEF SCORE_ONES EQU $9871
+SECTION "VBlank Interrupt", ROM0[$0040]
+VBlankInterrupt:
+	push af
+	push bc
+	push de
+	push hl
+	jp VBlankHandler
 
 SECTION "Header", ROM0[$100]
 
@@ -37,16 +37,10 @@ WaitVBlank:
     ld bc, TilemapEnd - Tilemap
     call Memcopy
 
-    ; Copy the paddle tile
-    ld de, Paddle
+    ; Copy the player tile
+    ld de, Player
     ld hl, $8000
-    ld bc, PaddleEnd - Paddle
-    call Memcopy
-
-    ; Copy the ball tile
-    ld de, Ball
-    ld hl, $8010
-    ld bc, BallEnd - Ball
+    ld bc, PlayerEnd - Player
     call Memcopy
 
     ld a, 0
@@ -57,7 +51,7 @@ ClearOam:
     dec b
     jp nz, ClearOam
 
-    ; Initialize the paddle sprite in OAM
+    ; Initialize the player sprite in OAM
     ld hl, _OAMRAM
     ld a, 128 + 16
     ld [hli], a
@@ -66,21 +60,6 @@ ClearOam:
     ld a, 0
     ld [hli], a
     ld [hli], a
-    ; Now initialize the ball sprite
-    ld a, 100 + 16
-    ld [hli], a
-    ld a, 32 + 8
-    ld [hli], a
-    ld a, 1
-    ld [hli], a
-    ld a, 0
-    ld [hli], a
-
-    ; The ball starts out going up and to the right
-    ld a, 1
-    ld [wBallMomentumX], a
-    ld a, -1
-    ld [wBallMomentumY], a
 
     ; Turn the LCD on
     ld a, LCDCF_ON | LCDCF_BGON | LCDCF_OBJON
@@ -97,7 +76,6 @@ ClearOam:
     ld [wFrameCounter], a
     ld [wCurKeys], a
     ld [wNewKeys], a
-    ld [wScore], a
 
 Main:
     ; Wait until it's *not* VBlank
@@ -109,107 +87,15 @@ WaitVBlank2:
     cp 144
     jp c, WaitVBlank2
 
-    ; Add the ball's momentum to its position in OAM.
-    ld a, [wBallMomentumX]
-    ld b, a
-    ld a, [_OAMRAM + 5]
-    add a, b
-    ld [_OAMRAM + 5], a
+    ld a, [wFrameCounter]
+    inc a
+    ld [wFrameCounter], a
+    cp a, 6 ; Every 6 frames (10 times per second), run the following code
+    jp nz, Main
 
-    ld a, [wBallMomentumY]
-    ld b, a
-    ld a, [_OAMRAM + 4]
-    add a, b
-    ld [_OAMRAM + 4], a
-
-BounceOnTop:
-    ; Remember to offset the OAM position!
-    ; (8, 16) in OAM coordinates is (0, 0) on the screen.
-    ld a, [_OAMRAM + 4]
-    sub a, 16 + 1
-    ld c, a
-    ld a, [_OAMRAM + 5]
-    sub a, 8
-    ld b, a
-    call GetTileByPixel ; Returns tile address in hl
-    ld a, [hl]
-    call IsWallTile
-    jp nz, BounceOnRight
-    call CheckAndHandleBrick
-    ld a, 1
-    ld [wBallMomentumY], a
-    call PlayBounceSound
-
-BounceOnRight:
-    ld a, [_OAMRAM + 4]
-    sub a, 16
-    ld c, a
-    ld a, [_OAMRAM + 5]
-    sub a, 8 - 1
-    ld b, a
-    call GetTileByPixel
-    ld a, [hl]
-    call IsWallTile
-    jp nz, BounceOnLeft
-    call CheckAndHandleBrick
-    ld a, -1
-    ld [wBallMomentumX], a
-    call PlayBounceSound
-
-BounceOnLeft:
-    ld a, [_OAMRAM + 4]
-    sub a, 16
-    ld c, a
-    ld a, [_OAMRAM + 5]
-    sub a, 8 + 1
-    ld b, a
-    call GetTileByPixel
-    ld a, [hl]
-    call IsWallTile
-    jp nz, BounceOnBottom
-    call CheckAndHandleBrick
-    ld a, 1
-    ld [wBallMomentumX], a
-    call PlayBounceSound
-
-BounceOnBottom:
-    ld a, [_OAMRAM + 4]
-    sub a, 16 - 1
-    ld c, a
-    ld a, [_OAMRAM + 5]
-    sub a, 8
-    ld b, a
-    call GetTileByPixel
-    ld a, [hl]
-    call IsWallTile
-    jp nz, BounceDone
-    call CheckAndHandleBrick
-    ld a, -1
-    ld [wBallMomentumY], a
-    call PlayBounceSound
-BounceDone:
-
-    ; First, check if the ball is low enough to bounce off the paddle.
-    ld a, [_OAMRAM]
-    ld b, a
-    ld a, [_OAMRAM + 4]
-    add a, 6
-    cp a, b
-    jp nz, PaddleBounceDone ; If the ball isn't at the same Y position as the paddle, it can't bounce.
-    ; Now let's compare the X positions of the objects to see if they're touching.
-    ld a, [_OAMRAM + 5] ; Ball's X position.
-    ld b, a
-    ld a, [_OAMRAM + 1] ; Paddle's X position.
-    sub a, 8
-    cp a, b
-    jp nc, PaddleBounceDone
-    add a, 8 + 16 ; 8 to undo, 16 as the width.
-    cp a, b
-    jp c, PaddleBounceDone
-    ld a, -1
-    ld [wBallMomentumY], a
-    call PlayPaddleBounceSound
-PaddleBounceDone:
+    ; Reset the frame counter back to 0
+    ld a, 0
+    ld [wFrameCounter], a
 
     ; Check the current keys every frame and move left or right.
     call UpdateKeys
@@ -220,11 +106,12 @@ CheckLeft:
     and a, PADF_LEFT
     jp z, CheckRight
 Left:
-    ; Move the paddle one pixel to the left.
+    call TogglePlayerSprite
+    ; Move the player one tile to the left.
     ld a, [_OAMRAM + 1]
-    dec a
+    sub a, 8
     ; If we've already hit the edge of the playfield, don't move.
-    cp a, 15
+    cp a, 8
     jp z, Main
     ld [_OAMRAM + 1], a
     jp Main
@@ -233,15 +120,46 @@ Left:
 CheckRight:
     ld a, [wCurKeys]
     and a, PADF_RIGHT
-    jp z, Main
+    jp z, CheckDown
 Right:
-    ; Move the paddle one pixel to the right.
+    call TogglePlayerSprite
+    ; Move the player one pixel to the right.
     ld a, [_OAMRAM + 1]
-    inc a
+    add a, 8
     ; If we've already hit the edge of the playfield, don't move.
-    cp a, 105
+    cp a, $70
     jp z, Main
     ld [_OAMRAM + 1], a
+    jp Main
+
+CheckDown:
+    ld a, [wCurKeys]
+    and a, PADF_DOWN
+    jp z, CheckUp
+Down:
+    call TogglePlayerSprite
+    ; Move the player one pixel to the left.
+    ld a, [_OAMRAM]
+    add a, 8
+    ; If we've already hit the edge of the playfield, don't move.
+    cp a, $98
+    jp z, Main
+    ld [_OAMRAM], a
+    jp Main
+
+CheckUp:
+    ld a, [wCurKeys]
+    and a, PADF_UP
+    jp z, Main
+Up:
+    call TogglePlayerSprite
+    ; Move the player one pixel to the left.
+    ld a, [_OAMRAM]
+    sub a, 8
+    ; If we've already hit the edge of the playfield, don't move.
+    cp a, $10
+    jp z, Main
+    ld [_OAMRAM], a
     jp Main
 
 UpdateKeys:
@@ -280,6 +198,16 @@ UpdateKeys:
     .knownret
     ret
 
+; Toggle the player sprite tile number between 0 and 1.
+TogglePlayerSprite:
+    push hl
+    ld hl, _OAMRAM+2
+    ld a, [hl]
+    xor 1
+    ld [hl], a
+    pop hl
+    ret
+
 ; Copy bytes from one area to another.
 ; @param de: Source
 ; @param hl: Destination
@@ -292,29 +220,6 @@ Memcopy:
     ld a, b
     or a, c
     jp nz, Memcopy
-    ret
-
-; Checks if a brick was collided with and breaks it if possible.
-; @param hl: address of tile.
-CheckAndHandleBrick:
-    ld a, [hl]
-    cp a, BRICK_LEFT
-    jr nz, CheckAndHandleBrickRight
-    ; Break a brick from the left side.
-    call PlayBreakSound
-    ld [hl], BLANK_TILE
-    inc hl
-    ld [hl], BLANK_TILE
-    call IncreaseScorePackedBCD
-CheckAndHandleBrickRight:
-    cp a, BRICK_RIGHT
-    ret nz
-    ; Break a brick from the right side.
-    call PlayBreakSound
-    ld [hl], BLANK_TILE
-    dec hl
-    ld [hl], BLANK_TILE
-    call IncreaseScorePackedBCD
     ret
 
 ; Convert a pixel position to a tilemap address
@@ -349,85 +254,14 @@ GetTileByPixel:
     add hl, bc
     ret
 
-; @param a: tile ID
-; @return z: set if a is a wall.
-IsWallTile:
-    cp a, $00
-    ret z
-    cp a, $01
-    ret z
-    cp a, $02
-    ret z
-    cp a, $04
-    ret z
-    cp a, $05
-    ret z
-    cp a, $06
-    ret z
-    cp a, $07
-    ret
-
-; Increase score by 1 and store it as a 1 byte packed BCD number
-IncreaseScorePackedBCD:
-    xor a               ; clear carry flag and a
-    inc a               ; a = 1
-    ld hl, wScore       ; load score
-    adc [hl]            ; add 1
-    daa                 ; convert to BCD
-    ld [hl], a          ; store score
-    call UpdateScoreBoard
-    ret 
-
-; Read the packed BCD score from wScore and updates the score display
-UpdateScoreBoard:
-    ld a, [wScore]      ; Get the Packed score
-    and %11110000       ; Mask the lower nibble
-    rrca                ; Move the upper nibble to the lower nibble (divide by 16)
-    rrca
-    rrca
-    rrca
-    add a, DIGIT_OFFSET ; Offset + add to get the digit tile
-    ld [SCORE_TENS], a  ; Show the digit on screen
-
-    ld a, [wScore]      ; Get the packed score again
-    and %00001111       ; Mask the upper nibble
-    add a, DIGIT_OFFSET ; Offset + add to get the digit tile again
-    ld [SCORE_ONES], a  ; Show the digit on screen
-    ret
-
-PlayBounceSound:
-    ld a, $85
-    ld [rNR21], a
-    ld a, $70
-    ld [rNR22], a
-    ld a, $0d
-    ld [rNR23], a
-    ld a, $c3
-    ld [rNR24], a
-    ret
-
-PlayPaddleBounceSound:
-    ld a, $85
-    ld [rNR21], a
-    ld a, $70
-    ld [rNR22], a
-    ld a, $f0
-    ld [rNR23], a
-    ld a, $d3
-    ld [rNR24], a
-    ret
-
-PlayBreakSound:
-    ld a, $01
-    ld [rNR41], a
-    ld a, $f0
-    ld [rNR42], a
-    ld a, $91
-    ld [rNR43], a
-    ld a, $c0
-    ld [rNR44], a
-    ret
-
+SECTION "VBlank Handler", ROM0
+VBlankHandler:
+	; Now we just have to `pop` those registers and return!
+	pop hl
+	pop de
+	pop bc
+	pop af
+	reti
 
 Tiles:
     dw `33333333
@@ -734,12 +568,12 @@ TilesEnd:
 
 Tilemap:
     db $00, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $02, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
-    db $04, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
-    db $04, $08, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
-    db $04, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $07, $03, $03, $1A, $1A, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
-    db $04, $08, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
-    db $04, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
-    db $04, $08, $05, $06, $05, $06, $05, $06, $05, $06, $05, $06, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
+    db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
+    db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
+    db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $1A, $1A, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
+    db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
+    db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
+    db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
@@ -753,38 +587,29 @@ Tilemap:
     db $04, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
 TilemapEnd:
 
-Paddle:
-    dw `13333331
+Player:
+    dw `00000000
+    dw `30300303
+    dw `03000030
+    dw `00333300
+    dw `03133130
+    dw `33133133
+    dw `33333333
     dw `30000003
-    dw `13333331
+Player2:
     dw `00000000
-    dw `00000000
-    dw `00000000
-    dw `00000000
-    dw `00000000
-PaddleEnd:
-
-Ball:
-    dw `00033000
-    dw `00322300
-    dw `03222230
-    dw `03222230
-    dw `00322300
-    dw `00033000
-    dw `00000000
-    dw `00000000
-BallEnd:
+    dw `03000030
+    dw `03000030
+    dw `00333300
+    dw `03233230
+    dw `33233233
+    dw `33333333
+    dw `03000030
+PlayerEnd:
     
-SECTION "Counter", WRAM0
+SECTION "Counter", HRAM
 wFrameCounter: db
 
 SECTION "Input Variables", WRAM0
 wCurKeys: db
 wNewKeys: db
-
-SECTION "Score", WRAM0
-wScore: db
-
-SECTION "Ball Data", WRAM0
-wBallMomentumX: db
-wBallMomentumY: db

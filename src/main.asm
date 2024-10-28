@@ -31,11 +31,15 @@ WaitVBlank:
     ld bc, TilesEnd - Tiles
     call Memcopy
 
-    ; Copy the tilemap
+    ; Copy the initial tilemap
     ld de, Tilemap
     ld hl, $9800
     ld bc, TilemapEnd - Tilemap
     call Memcopy
+
+    ; Generate the wall tiles
+    ld hl, $9821 ; start at (1,1)
+    call PlaceWalls
 
     ; Copy the player tile
     ld de, Player
@@ -76,6 +80,9 @@ ClearOam:
     ld [wFrameCounter], a
     ld [wCurKeys], a
     ld [wNewKeys], a
+
+    ld a, [rDIV]  ; Load the value of DIV register into A
+    ld [wRandomSeed], a    ; Store it in the seed variable
 
 Main:
     ; Wait until it's *not* VBlank
@@ -201,12 +208,55 @@ UpdateKeys:
 ; Toggle the player sprite tile number between 0 and 1.
 TogglePlayerSprite:
     push hl
+    push af
     ld hl, _OAMRAM+2
     ld a, [hl]
     xor 1
     ld [hl], a
+    pop af
     pop hl
     ret
+
+PlaceWalls:
+    push af
+    push bc
+    push hl
+    ld c, 13  ; Set a probability of (255/20)%  for a wall
+    ld de, 20 ; DE holds the screen width (20 tiles)
+    ld b, 192 ; B holds the total number of tiles (12 x 16)
+
+WallLoop:
+    call Random  ; Get a random number in A (0-255)
+    cp c        ; Compare with our probability threshold
+    jr nc, NoWall  ; If the random number is greater than or equal to C, skip wall placement
+    ld [hl], 1   ; 1 represents a wall tile
+
+NoWall:
+    inc hl      ; Move to the next tile
+    ld a, l     ; Get the lower byte of HL (x-coordinate)
+    cp 13       ; Check if we reached the end of a row (12 tiles)
+    jr nz, NotEndOfRow
+    add hl, de   ; If at the end of the row, jump to the next row
+                 ; by adding the screen width (DE) to HL
+
+NotEndOfRow:
+    dec b        ; Decrement the loop counter
+    jr nz, WallLoop  ; Loop if not zero
+    pop hl   ; Restore HL
+    pop bc
+    pop af
+    ret
+
+; Returns a random number (LFSR) in A (0-255)
+Random:
+    ld a, [wRandomSeed]  ; Load the current seed value
+    rra           ; Rotate right through carry
+    jr nc, NoCarry
+    xor a, $2D   ; XOR with a magic number if carry was set
+NoCarry:
+    ld [wRandomSeed], a  ; Store the new seed value
+    ret
+
 
 ; Copy bytes from one area to another.
 ; @param de: Source
@@ -567,6 +617,8 @@ Tiles:
 TilesEnd:
 
 Tilemap:
+; Game map window is 12x16 starting at (1,1)
+; Score at (3,16)-(3,17)
     db $00, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $02, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
@@ -607,8 +659,9 @@ Player2:
     dw `03000030
 PlayerEnd:
     
-SECTION "Counter", HRAM
+SECTION "Counters", HRAM
 wFrameCounter: db
+wRandomSeed: db
 
 SECTION "Input Variables", WRAM0
 wCurKeys: db

@@ -37,9 +37,9 @@ WaitVBlank:
     ld bc, TilemapEnd - Tilemap
     call Memcopy
 
-    ; Generate the wall tiles
-    ld hl, $9821 ; start at (1,1)
-    call PlaceWalls
+    ; Choose and draw the map tiles
+    xor a ; pick map #0
+    call DrawMap
 
     ; Copy the player tile
     ld de, Player
@@ -145,7 +145,7 @@ CheckDown:
     jp z, CheckUp
 Down:
     call TogglePlayerSprite
-    ; Move the player one pixel to the left.
+    ; Move the player one tile to the left.
     ld a, [_OAMRAM]
     add a, 8
     ; If we've already hit the edge of the playfield, don't move.
@@ -160,7 +160,7 @@ CheckUp:
     jp z, Main
 Up:
     call TogglePlayerSprite
-    ; Move the player one pixel to the left.
+    ; Move the player one tile to the left.
     ld a, [_OAMRAM]
     sub a, 8
     ; If we've already hit the edge of the playfield, don't move.
@@ -217,31 +217,33 @@ TogglePlayerSprite:
     pop hl
     ret
 
-PlaceWalls:
+; Copy bytes from one area to another.
+; @param a: Index of map to draw
+DrawMap:
     push af
     push bc
     push hl
-    ld c, 13  ; Set a probability of (255/20)%  for a wall
-    ld de, 20 ; DE holds the screen width (20 tiles)
-    ld b, 192 ; B holds the total number of tiles (12 x 16)
+    ld de, Map1  + (Map1End - Map1)
+    ld hl, $9821 ; start at (1,1)
+    ld b, 16 ; rows
+RowLoop:
+    ld c, 12 ; tiles per row
+TileLoop:
+    ld a, [de]
+    ld [hli], a
+    inc de
+    dec c
+    jr nz, TileLoop
 
-WallLoop:
-    call Random  ; Get a random number in A (0-255)
-    cp c        ; Compare with our probability threshold
-    jr nc, NoWall  ; If the random number is greater than or equal to C, skip wall placement
-    ld [hl], 1   ; 1 represents a wall tile
+    ; wrap to the next line
+    push bc
+    ld bc, 20
+    add hl, bc
+    pop bc
 
-NoWall:
-    inc hl      ; Move to the next tile
-    ld a, l     ; Get the lower byte of HL (x-coordinate)
-    cp 13       ; Check if we reached the end of a row (12 tiles)
-    jr nz, NotEndOfRow
-    add hl, de   ; If at the end of the row, jump to the next row
-                 ; by adding the screen width (DE) to HL
+    dec b
+    jr nz, RowLoop
 
-NotEndOfRow:
-    dec b        ; Decrement the loop counter
-    jr nz, WallLoop  ; Loop if not zero
     pop hl   ; Restore HL
     pop bc
     pop af
@@ -638,6 +640,25 @@ Tilemap:
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $16, $17, $18, $19, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
 TilemapEnd:
+
+Map1:
+    db $01, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $01, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $01, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $01, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $01, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $01, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $01, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $01, $01, $01,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $01, $01, $01,
+Map1End:
 
 Player:
     dw `00000000

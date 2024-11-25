@@ -114,12 +114,14 @@ CheckLeft:
     jp z, CheckRight
 Left:
     call TogglePlayerSprite
+    call GetPlayerTileByPixel
+    dec l
+    ld a, [hl]
+    call IsWallTile
+    jp z, Main
     ; Move the player one tile to the left.
     ld a, [_OAMRAM + 1]
     sub a, 8
-    ; If we've already hit the edge of the playfield, don't move.
-    cp a, 8
-    jp z, Main
     ld [_OAMRAM + 1], a
     jp Main
 
@@ -130,12 +132,14 @@ CheckRight:
     jp z, CheckDown
 Right:
     call TogglePlayerSprite
+    call GetPlayerTileByPixel
+    inc l
+    ld a, [hl]
+    call IsWallTile
+    jp z, Main
     ; Move the player one pixel to the right.
     ld a, [_OAMRAM + 1]
     add a, 8
-    ; If we've already hit the edge of the playfield, don't move.
-    cp a, $70
-    jp z, Main
     ld [_OAMRAM + 1], a
     jp Main
 
@@ -145,12 +149,15 @@ CheckDown:
     jp z, CheckUp
 Down:
     call TogglePlayerSprite
+    call GetPlayerTileByPixel
+    ld bc, 32 ; Add one row
+    add hl, bc
+    ld a, [hl]
+    call IsWallTile
+    jp z, Main
     ; Move the player one tile to the left.
     ld a, [_OAMRAM]
     add a, 8
-    ; If we've already hit the edge of the playfield, don't move.
-    cp a, $98
-    jp z, Main
     ld [_OAMRAM], a
     jp Main
 
@@ -160,12 +167,15 @@ CheckUp:
     jp z, Main
 Up:
     call TogglePlayerSprite
+    call GetPlayerTileByPixel
+    ld bc, -32 ; Substract one row
+    add hl, bc
+    ld a, [hl]
+    call IsWallTile
+    jp z, Main
     ; Move the player one tile to the left.
     ld a, [_OAMRAM]
     sub a, 8
-    ; If we've already hit the edge of the playfield, don't move.
-    cp a, $10
-    jp z, Main
     ld [_OAMRAM], a
     jp Main
 
@@ -274,7 +284,19 @@ Memcopy:
     jp nz, Memcopy
     ret
 
-; Convert a pixel position to a tilemap address
+; Gets the tile address of the player sprite based on its pixel position.
+; @changes bc, a
+; @return hl: tile address
+GetPlayerTileByPixel:
+	ld a, [_OAMRAM]
+	sub a, 16 - 1
+	ld c, a
+	ld a, [_OAMRAM + 1]
+	sub a, 8
+	ld b, a
+	call GetTileByPixel
+	ret
+
 ; hl = $9800 + X + Y * 32
 ; @param b: X
 ; @param c: Y
@@ -304,6 +326,26 @@ GetTileByPixel:
     ; Add the offset to the tilemap's base address, and we are done!
     ld bc, $9800
     add hl, bc
+    ret
+
+; @param a: tile ID
+; @return z: set if a is a wall.
+IsWallTile:
+    cp a, $00
+    ret z
+    cp a, $01
+    ret z
+    cp a, $02
+    ret z
+    cp a, $04
+    ret z
+    cp a, $05
+    ret z
+    cp a, $06
+    ret z
+    cp a, $07
+    ret z
+    cp a, $09
     ret
 
 SECTION "VBlank Handler", ROM0

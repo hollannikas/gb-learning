@@ -31,11 +31,15 @@ WaitVBlank:
     ld bc, TilesEnd - Tiles
     call Memcopy
 
-    ; Copy the tilemap
+    ; Copy the initial tilemap
     ld de, Tilemap
     ld hl, $9800
     ld bc, TilemapEnd - Tilemap
     call Memcopy
+
+    ; Choose and draw the map tiles
+    xor a ; pick map #0
+    call DrawMap
 
     ; Copy the player tile
     ld de, Player
@@ -77,6 +81,9 @@ ClearOam:
     ld [wCurKeys], a
     ld [wNewKeys], a
 
+    ld a, [rDIV]  ; Load the value of DIV register into A
+    ld [wRandomSeed], a    ; Store it in the seed variable
+
 Main:
     ; Wait until it's *not* VBlank
     ld a, [rLY]
@@ -107,12 +114,14 @@ CheckLeft:
     jp z, CheckRight
 Left:
     call TogglePlayerSprite
+    call GetPlayerTileByPixel
+    dec l
+    ld a, [hl]
+    call IsWallTile
+    jp z, Main
     ; Move the player one tile to the left.
     ld a, [_OAMRAM + 1]
     sub a, 8
-    ; If we've already hit the edge of the playfield, don't move.
-    cp a, 8
-    jp z, Main
     ld [_OAMRAM + 1], a
     jp Main
 
@@ -123,12 +132,14 @@ CheckRight:
     jp z, CheckDown
 Right:
     call TogglePlayerSprite
+    call GetPlayerTileByPixel
+    inc l
+    ld a, [hl]
+    call IsWallTile
+    jp z, Main
     ; Move the player one pixel to the right.
     ld a, [_OAMRAM + 1]
     add a, 8
-    ; If we've already hit the edge of the playfield, don't move.
-    cp a, $70
-    jp z, Main
     ld [_OAMRAM + 1], a
     jp Main
 
@@ -138,12 +149,15 @@ CheckDown:
     jp z, CheckUp
 Down:
     call TogglePlayerSprite
-    ; Move the player one pixel to the left.
+    call GetPlayerTileByPixel
+    ld bc, 32 ; Add one row
+    add hl, bc
+    ld a, [hl]
+    call IsWallTile
+    jp z, Main
+    ; Move the player one tile to the left.
     ld a, [_OAMRAM]
     add a, 8
-    ; If we've already hit the edge of the playfield, don't move.
-    cp a, $98
-    jp z, Main
     ld [_OAMRAM], a
     jp Main
 
@@ -153,12 +167,15 @@ CheckUp:
     jp z, Main
 Up:
     call TogglePlayerSprite
-    ; Move the player one pixel to the left.
+    call GetPlayerTileByPixel
+    ld bc, -32 ; Substract one row
+    add hl, bc
+    ld a, [hl]
+    call IsWallTile
+    jp z, Main
+    ; Move the player one tile to the left.
     ld a, [_OAMRAM]
     sub a, 8
-    ; If we've already hit the edge of the playfield, don't move.
-    cp a, $10
-    jp z, Main
     ld [_OAMRAM], a
     jp Main
 
@@ -201,12 +218,57 @@ UpdateKeys:
 ; Toggle the player sprite tile number between 0 and 1.
 TogglePlayerSprite:
     push hl
+    push af
     ld hl, _OAMRAM+2
     ld a, [hl]
     xor 1
     ld [hl], a
+    pop af
     pop hl
     ret
+
+; Copy bytes from one area to another.
+; @param a: Index of map to draw
+DrawMap:
+    push af
+    push bc
+    push hl
+    ld de, Map1  + (Map1End - Map1)
+    ld hl, $9821 ; start at (1,1)
+    ld b, 16 ; rows
+RowLoop:
+    ld c, 12 ; tiles per row
+TileLoop:
+    ld a, [de]
+    ld [hli], a
+    inc de
+    dec c
+    jr nz, TileLoop
+
+    ; wrap to the next line
+    push bc
+    ld bc, 20
+    add hl, bc
+    pop bc
+
+    dec b
+    jr nz, RowLoop
+
+    pop hl   ; Restore HL
+    pop bc
+    pop af
+    ret
+
+; Returns a random number (LFSR) in A (0-255)
+Random:
+    ld a, [wRandomSeed]  ; Load the current seed value
+    rra           ; Rotate right through carry
+    jr nc, NoCarry
+    xor a, $2D   ; XOR with a magic number if carry was set
+NoCarry:
+    ld [wRandomSeed], a  ; Store the new seed value
+    ret
+
 
 ; Copy bytes from one area to another.
 ; @param de: Source
@@ -222,7 +284,19 @@ Memcopy:
     jp nz, Memcopy
     ret
 
-; Convert a pixel position to a tilemap address
+; Gets the tile address of the player sprite based on its pixel position.
+; @changes bc, a
+; @return hl: tile address
+GetPlayerTileByPixel:
+	ld a, [_OAMRAM]
+	sub a, 16 - 1
+	ld c, a
+	ld a, [_OAMRAM + 1]
+	sub a, 8
+	ld b, a
+	call GetTileByPixel
+	ret
+
 ; hl = $9800 + X + Y * 32
 ; @param b: X
 ; @param c: Y
@@ -252,6 +326,26 @@ GetTileByPixel:
     ; Add the offset to the tilemap's base address, and we are done!
     ld bc, $9800
     add hl, bc
+    ret
+
+; @param a: tile ID
+; @return z: set if a is a wall.
+IsWallTile:
+    cp a, $00
+    ret z
+    cp a, $01
+    ret z
+    cp a, $02
+    ret z
+    cp a, $04
+    ret z
+    cp a, $05
+    ret z
+    cp a, $06
+    ret z
+    cp a, $07
+    ret z
+    cp a, $09
     ret
 
 SECTION "VBlank Handler", ROM0
@@ -567,6 +661,8 @@ Tiles:
 TilesEnd:
 
 Tilemap:
+; Game map window is 12x16 starting at (1,1)
+; Score at (3,16)-(3,17)
     db $00, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $01, $02, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
@@ -586,6 +682,25 @@ Tilemap:
     db $04, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $07, $03, $16, $17, $18, $19, $03, 0,0,0,0,0,0,0,0,0,0,0,0
     db $04, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $09, $07, $03, $03, $03, $03, $03, $03, 0,0,0,0,0,0,0,0,0,0,0,0
 TilemapEnd:
+
+Map1:
+    db $01, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $01, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $01, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $01, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $01, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $01, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $01, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $01, $01, $01,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $01, $01, $01,
+Map1End:
 
 Player:
     dw `00000000
@@ -607,8 +722,9 @@ Player2:
     dw `03000030
 PlayerEnd:
     
-SECTION "Counter", HRAM
+SECTION "Counters", HRAM
 wFrameCounter: db
+wRandomSeed: db
 
 SECTION "Input Variables", WRAM0
 wCurKeys: db

@@ -233,7 +233,7 @@ DrawMap:
     push af
     push bc
     push hl
-    ld de, Map1  + (Map1End - Map1)
+    ld de, Map1
     ld hl, $9821 ; start at (1,1)
     ld b, 16 ; rows
 RowLoop:
@@ -302,31 +302,31 @@ GetPlayerTileByPixel:
 ; @param c: Y
 ; @return hl: tile address
 GetTileByPixel:
-    ; First, we need to divide by 8 to convert a pixel position to a tile position.
-    ; After this we want to multiply the Y position by 32.
-    ; These operations effectively cancel out so we only need to mask the Y value.
-    ld a, c
-    and a, %11111000
-    ld l, a
-    ld h, 0
-    ; Now we have the position * 8 in hl
-    add hl, hl ; position * 16
-    add hl, hl ; position * 32
-    ; Convert the X position to an offset.
-    ld a, b
-    srl a ; a / 2
-    srl a ; a / 4
-    srl a ; a / 8
-    ; Add the two offsets together.
-    add a, l
-    ld l, a
-    adc a, h
-    sub a, l
-    ld h, a
-    ; Add the offset to the tilemap's base address, and we are done!
-    ld bc, $9800
-    add hl, bc
-    ret
+	; First, we need to divide by 8 to convert a pixel position to a tile position.
+	; After this we want to multiply the Y position by 32.
+	; These operations effectively cancel out so we only need to mask the Y value.
+	ld a, c
+	and a, %11111000
+	ld l, a
+	ld h, 0
+	; Now we have the position * 8 in hl
+	add hl, hl ; position * 16
+	add hl, hl ; position * 32
+	; Convert the X position to an offset.
+	ld a, b
+	srl a ; a / 2
+	srl a ; a / 4
+	srl a ; a / 8
+	; Add the two offsets together.
+	add a, l
+	ld l, a
+	adc a, h
+	sub a, l
+	ld h, a
+	; Add the offset to the tilemap's base address, and we are done!
+	ld bc, $9800
+	add hl, bc
+	ret
 
 ; @param a: tile ID
 ; @return z: set if a is a wall.
@@ -701,6 +701,26 @@ Map1:
     db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
     db $08, $08, $08, $08, $08, $08, $08, $08, $08, $01, $01, $01,
 Map1End:
+
+Map2:
+    db $01, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $01, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $01, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $01, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $01, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $01, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $01, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $01, $01, $01,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $01, $01, $01,
+ Map2End:
+
 
 Player:
     dw `00000000

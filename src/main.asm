@@ -1,5 +1,7 @@
 INCLUDE "hardware.inc"
 
+DEF MAP_SIZE EQU 180
+
 SECTION "VBlank Interrupt", ROM0[$0040]
 VBlankInterrupt:
 	push af
@@ -38,7 +40,8 @@ WaitVBlank:
     call Memcopy
 
     ; Choose and draw the map tiles
-    xor a ; pick map #0
+    call Random ; Get a random number into A
+    and 1 ; Check the least significant bit
     call DrawMap
 
     ; Copy the player tile
@@ -81,7 +84,11 @@ ClearOam:
     ld [wCurKeys], a
     ld [wNewKeys], a
 
-    ld a, [rDIV]  ; Load the value of DIV register into A
+    ; Initialize the random seed
+    ld a, [$FF04]   ; Get DIV upper byte
+    ld b, a         ; put it in B
+    ld a, [$FF05]   ; Get DIV lower byte
+    xor a, b        ; XOR the lower byte with the upper byte
     ld [wRandomSeed], a    ; Store it in the seed variable
 
 Main:
@@ -233,7 +240,15 @@ DrawMap:
     push af
     push bc
     push hl
-    ld de, Map1
+    ld hl, Map1 - MAP_SIZE
+    ld de, MAP_SIZE
+    inc a ; TODO: move this to generating random number between 1 and 2 in stead of 0 and 1
+MapIncreaseLoop:
+    add hl, de ; add a map size (next map)
+    dec a ; decrease counter
+    jr nz, MapIncreaseLoop
+    ld d, h ; swap de and hl
+    ld e, l
     ld hl, $9821 ; start at (1,1)
     ld b, 16 ; rows
 RowLoop:
@@ -268,7 +283,6 @@ Random:
 NoCarry:
     ld [wRandomSeed], a  ; Store the new seed value
     ret
-
 
 ; Copy bytes from one area to another.
 ; @param de: Source
@@ -718,7 +732,7 @@ Map2:
     db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
     db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
     db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
-    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $01, $01, $01,
+    db $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08, $08,
  Map2End:
 
 
@@ -745,6 +759,7 @@ PlayerEnd:
 SECTION "Counters", HRAM
 wFrameCounter: db
 wRandomSeed: db
+wLevel: dw
 
 SECTION "Input Variables", WRAM0
 wCurKeys: db
